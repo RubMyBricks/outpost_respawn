@@ -1,7 +1,7 @@
 # Outpost Respawn
 Hello everyone, here is a free plugin that enables you to spawn at outpost upon death!
 
-[![discord][discord-badge]][discord-link] [![license][license-badge]][gnu-gpl-link] [![open-bugs][bug-badge]][bug-link] [![darkan](https://snapcraft.io/darkan/badge.svg)](https://snapcraft.io/darkan)
+[![discord][discord-badge]][discord-link] [![license][license-badge]][gnu-gpl-link]
 
 [discord-link]: https://discord.gg/Z32ggEB
 [discord-badge]: https://img.shields.io/discord/118102728026095623?label=discord&logo=discord
