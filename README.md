@@ -3,7 +3,7 @@ Hello everyone, here is a free plugin that enables you to spawn at outpost upon 
 
 [![discord][discord-badge]][discord-link] [![license][license-badge]][gnu-gpl-link]
 
-[discord-link]: discordapp.com/users/rubmybricks
+[discord-link]: https://discord.gg/gPg92292HS
 [discord-badge]: https://img.shields.io/discord/118102728026095623?label=discord&logo=discord
 
 [gnu-gpl-link]: https://www.gnu.org/licenses/gpl-3.0.en.html
