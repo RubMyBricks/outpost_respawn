@@ -15,7 +15,7 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("OutpostRespawn", "RubMyBricks", "1.0.6")]
+    [Info("OutpostRespawn", "RubMyBricks", "1.0.7")]
     [Description("Allows players to spawn at safezones upon death!")]
     public class OutpostRespawn : RustPlugin
     {
@@ -35,7 +35,7 @@ namespace Oxide.Plugins
         {
             try
             {
-                Puts("Searching for Outpost monument...");
+                Puts("Searching for outpost...");
 
                 var monuments = TerrainMeta.Path.Monuments;
                 Puts($"Found {monuments.Count} monuments total");
@@ -166,7 +166,7 @@ namespace Oxide.Plugins
 
             if (!permission.UserHasPermission(player.UserIDString, PermissionUse))
             {
-                player.ChatMessage("You don't have permission to respawn at ooutpost");
+                player.ChatMessage("You don't have permission to respawn at outpost");
                 return;
             }
 
