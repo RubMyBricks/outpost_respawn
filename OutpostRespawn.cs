@@ -1,4 +1,4 @@
-﻿///////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////
 //                         Made by RubMyBricks                           //
 //                         Discord: rubmybricks                          //
 //                         Website: www.bricksx.xyz                      //
@@ -16,6 +16,7 @@ using System.Collections.Generic;
 namespace Oxide.Plugins
 {
     [Info("OutpostRespawn", "RubMyBricks", "1.0.5")]
+    [Description("Allows players to spawn at safezones upon death!")]
     public class OutpostRespawn : RustPlugin
     {
         private const string PermissionUse = "outpostrespawn.use";
@@ -82,9 +83,9 @@ namespace Oxide.Plugins
                 InitializeSpawnPoints();
             }
 
-            timer.Once(0.1f, () => ShowRespawnGUI(player));
-            timer.Once(0.5f, () => ShowRespawnGUI(player));
-            timer.Once(1.0f, () => ShowRespawnGUI(player));
+            timer.Once(4.0f, () => ShowRespawnGUI(player));  
+            timer.Once(4.5f, () => ShowRespawnGUI(player));  
+            timer.Once(5.0f, () => ShowRespawnGUI(player));  
         }
 
         private void ShowRespawnGUI(BasePlayer player)
@@ -93,17 +94,18 @@ namespace Oxide.Plugins
 
             var elements = new CuiElementContainer();
 
+            
             elements.Add(new CuiPanel
             {
                 Image = { Color = "0 0 0 0" },
-                RectTransform = { AnchorMin = "0 0", AnchorMax = "1 1" },
-                CursorEnabled = true
+                RectTransform = { AnchorMin = "0.45 0.15", AnchorMax = "0.55 0.22" }, 
+                CursorEnabled = false 
             }, "Overlay", $"{GUI_PANEL_NAME}_overlay");
 
             elements.Add(new CuiPanel
             {
                 Image = { Color = "0.42 0.55 0.24 1" },
-                RectTransform = { AnchorMin = "0.45 0.15", AnchorMax = "0.55 0.22" },
+                RectTransform = { AnchorMin = "0 0", AnchorMax = "1 1" },
                 CursorEnabled = true
             }, $"{GUI_PANEL_NAME}_overlay", GUI_PANEL_NAME);
 
@@ -112,10 +114,10 @@ namespace Oxide.Plugins
                 Name = $"{GUI_PANEL_NAME}_icon",
                 Parent = GUI_PANEL_NAME,
                 Components =
-                {
-                    new CuiImageComponent { Sprite = "assets/icons/arrow_right.png", Color = "1 1 1 1" },
-                    new CuiRectTransformComponent { AnchorMin = "0.02 0.1", AnchorMax = "0.18 0.9" }
-                }
+        {
+            new CuiImageComponent { Sprite = "assets/icons/arrow_right.png", Color = "1 1 1 1" },
+            new CuiRectTransformComponent { AnchorMin = "0.02 0.1", AnchorMax = "0.18 0.9" }
+        }
             });
 
             elements.Add(new CuiLabel
