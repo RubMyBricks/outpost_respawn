@@ -15,7 +15,7 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("OutpostRespawn", "RubMyBricks", "1.0.5")]
+    [Info("OutpostRespawn", "RubMyBricks", "1.0.6")]
     [Description("Allows players to spawn at safezones upon death!")]
     public class OutpostRespawn : RustPlugin
     {
