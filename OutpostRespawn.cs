@@ -15,7 +15,7 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("OutpostRespawn", "RubMyBricks", "1.0.7")]
+    [Info("OutpostRespawn", "RubMyBricks", "1.0.8")]
     [Description("Allows players to spawn at safezones upon death!")]
     public class OutpostRespawn : RustPlugin
     {
@@ -28,6 +28,8 @@ namespace Oxide.Plugins
 
         void OnServerInitialized()
         {
+            permission.RegisterPermission(PermissionUse, this);
+
             InitializeSpawnPoints();
         }
 
