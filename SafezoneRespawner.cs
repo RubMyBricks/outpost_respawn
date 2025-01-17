@@ -45,7 +45,7 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Use ImageLibrary for Icons")]
             public bool UseImageLibrary { get; set; } = false;
 
-            [JsonProperty(PropertyName = "Cooldown Time (minutes) // change to 0 to disable the timer :)")]
+            [JsonProperty(PropertyName = "Cooldown Time (minutes)")]
             public float CooldownMinutes { get; set; } = 2f;
 
             [JsonProperty(PropertyName = "Custom Images")]
@@ -342,7 +342,13 @@ namespace Oxide.Plugins
             var cooldownTime = GetCooldownTimeRemaining(player.userID);
             if (cooldownTime > 0)
             {
-                timer.Once(1f, () => ShowRespawnGUI(player));
+                if (guiTimers.ContainsKey(player.userID))
+                {
+                    guiTimers[player.userID]?.Destroy();
+                }
+
+                var updateTimer = timer.Once(1f, () => ShowRespawnGUI(player));
+                guiTimers[player.userID] = updateTimer;
             }
         }
 
@@ -354,6 +360,8 @@ namespace Oxide.Plugins
         #endregion
 
         #region Hooks
+        private Timer initialGUITimer;
+
         void OnPlayerDeath(BasePlayer player, HitInfo info)
         {
             if (!permission.UserHasPermission(player.UserIDString, PermissionUse))
@@ -364,13 +372,35 @@ namespace Oxide.Plugins
                 InitializeSpawnPoints();
             }
 
-            timer.Once(4.0f, () => ShowRespawnGUI(player));
-            timer.Once(4.5f, () => ShowRespawnGUI(player));
-            timer.Once(5.0f, () => ShowRespawnGUI(player));
+            initialGUITimer?.Destroy();
+
+            initialGUITimer = timer.Once(4.0f, () =>
+            {
+                if (!player.IsDead()) return; 
+                ShowRespawnGUI(player);
+
+                timer.Once(0.5f, () =>
+                {
+                    if (!player.IsDead()) return;
+                    ShowRespawnGUI(player);
+
+                    timer.Once(0.5f, () =>
+                    {
+                        if (!player.IsDead()) return;
+                        ShowRespawnGUI(player);
+                    });
+                });
+            });
         }
 
         void OnPlayerRespawned(BasePlayer player)
         {
+            if (guiTimers.ContainsKey(player.userID))
+            {
+                guiTimers[player.userID]?.Destroy();
+                guiTimers.Remove(player.userID);
+            }
+
             DestroyGUI(player);
         }
 
@@ -434,6 +464,14 @@ namespace Oxide.Plugins
 
         void Unload()
         {
+            initialGUITimer?.Destroy();
+
+            foreach (var timer in guiTimers.Values)
+            {
+                timer?.Destroy();
+            }
+            guiTimers.Clear();
+
             foreach (var player in BasePlayer.activePlayerList)
             {
                 DestroyGUI(player);
