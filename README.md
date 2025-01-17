@@ -1,4 +1,4 @@
 # permissions
-outpostrespawn.use
+safezonerespawner.use
 # support
 If any bugs or errors lmk
