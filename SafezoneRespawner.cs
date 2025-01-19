@@ -1,3 +1,13 @@
+
+///////////////////////////////////////////////////////////////////////////
+//                         Made by RubMyBricks                           //
+//                         Discord: rubmybricks                          //
+//                         DiscordServer: https://discord.gg/gPg92292HS  //
+//                         Website: www.bricksx.xyz                      //
+//                                                                       //
+//                         Feel free to message me on                    //
+//                         discord if you have any issues!               //
+///////////////////////////////////////////////////////////////////////////       
 using Oxide.Core;
 using Oxide.Core.Plugins;
 using Oxide.Game.Rust.Cui;
@@ -8,7 +18,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Safezone Respawner", "RubMyBricks", "1.2.0")]
+    [Info("Safezone Respawner", "RubMyBricks", "1.3.0")]
     [Description("Allows players to respawn at safezones upon death with cooldown!")]
     public class SafezoneRespawner : RustPlugin
     {
@@ -28,7 +38,7 @@ namespace Oxide.Plugins
         private Vector3 outpostSpawnPoint;
         private Vector3 banditSpawnPoint;
         private Dictionary<ulong, Timer> guiTimers = new Dictionary<ulong, Timer>();
-        private Dictionary<ulong, DateTime> playerCooldowns = new Dictionary<ulong, DateTime>();
+        private Dictionary<ulong, Dictionary<string, DateTime>> playerCooldowns = new Dictionary<ulong, Dictionary<string, DateTime>>();
         private bool isInitialized = false;
         private ConfigData config;
         #endregion
@@ -45,14 +55,47 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Use ImageLibrary for Icons")]
             public bool UseImageLibrary { get; set; } = false;
 
-            [JsonProperty(PropertyName = "Cooldown Time (minutes)")]
-            public float CooldownMinutes { get; set; } = 2f;
+            [JsonProperty(PropertyName = "Spawn Settings")]
+            public SpawnSettings SpawnSettings { get; set; } = new SpawnSettings();
 
             [JsonProperty(PropertyName = "Custom Images")]
             public CustomImages Images { get; set; } = new CustomImages();
 
             [JsonProperty(PropertyName = "GUI Settings")]
             public GUISettings GuiSettings { get; set; } = new GUISettings();
+        }
+
+        private class SpawnSettings
+        {
+            [JsonProperty(PropertyName = "Outpost Cooldown (seconds)")]
+            public float OutpostCooldown { get; set; } = 120f;
+
+            [JsonProperty(PropertyName = "Bandit Camp Cooldown (seconds)")]
+            public float BanditCooldown { get; set; } = 120f;
+
+            [JsonProperty(PropertyName = "Spawn Health (max =100")]
+            public float SpawnHealth { get; set; } = 100f;
+
+            [JsonProperty(PropertyName = "Spawn Food (max =300?)")]
+            public float SpawnFood { get; set; } = 300f;
+
+            [JsonProperty(PropertyName = "Spawn Water (max =250)]
+            public float SpawnWater { get; set; } = 200f;
+
+            [JsonProperty(PropertyName = "Spawn Position Offsets")]
+            public SpawnOffsets SpawnOffsets { get; set; } = new SpawnOffsets();
+        }
+
+        private class SpawnOffsets
+        {
+            [JsonProperty(PropertyName = "Outpost Offset (X,Y,Z)")]
+            public Vector3 OutpostOffset { get; set; } = new Vector3(0f, 0f, -23f);
+
+            [JsonProperty(PropertyName = "Bandit Camp Offset (X,Y,Z)")]
+            public Vector3 BanditOffset { get; set; } = new Vector3(0f, 0f, -25f);
+
+            [JsonProperty(PropertyName = "Height Above Ground")]
+            public float HeightAboveGround { get; set; } = 0.3f;
         }
 
         private class CustomImages
@@ -117,7 +160,7 @@ namespace Oxide.Plugins
             {
                 if (ImageLibrary == null)
                 {
-                    PrintWarning("Imagelibrary is enabled in config but not loaded! Plugin will use default icons.");
+                    PrintWarning("ImageLibrary is enabled in config but not loaded! Plugin will use default icons.");
                 }
                 else
                 {
@@ -134,7 +177,7 @@ namespace Oxide.Plugins
                 Puts("Searching for safezones...");
 
                 var monuments = TerrainMeta.Path.Monuments;
-                Puts($"Found {monuments.Count} safezones total");
+                Puts($"Found {monuments.Count} monuments total");
 
                 foreach (var monument in monuments)
                 {
@@ -146,9 +189,11 @@ namespace Oxide.Plugins
                         Puts($"Found Outpost at position: {monument.transform.position}");
                         outpostPosition = monument.transform.position;
 
-                        outpostSpawnPoint = outpostPosition + new Vector3(0f, 0f, -23f);
+                        outpostSpawnPoint = outpostPosition + config.SpawnSettings.SpawnOffsets.OutpostOffset;
                         float groundY = TerrainMeta.HeightMap.GetHeight(outpostSpawnPoint);
-                        outpostSpawnPoint = new Vector3(outpostSpawnPoint.x, groundY + 0.3f, outpostSpawnPoint.z);
+                        outpostSpawnPoint = new Vector3(outpostSpawnPoint.x,
+                            groundY + config.SpawnSettings.SpawnOffsets.HeightAboveGround,
+                            outpostSpawnPoint.z);
 
                         Puts($"Set outpost spawn point at: {outpostSpawnPoint}");
                     }
@@ -157,9 +202,11 @@ namespace Oxide.Plugins
                         Puts($"Found Bandit Camp at position: {monument.transform.position}");
                         banditPosition = monument.transform.position;
 
-                        banditSpawnPoint = banditPosition + new Vector3(0f, 0f, -25f);
+                        banditSpawnPoint = banditPosition + config.SpawnSettings.SpawnOffsets.BanditOffset;
                         float groundY = TerrainMeta.HeightMap.GetHeight(banditSpawnPoint);
-                        banditSpawnPoint = new Vector3(banditSpawnPoint.x, groundY + 0.3f, banditSpawnPoint.z);
+                        banditSpawnPoint = new Vector3(banditSpawnPoint.x,
+                            groundY + config.SpawnSettings.SpawnOffsets.HeightAboveGround,
+                            banditSpawnPoint.z);
 
                         Puts($"Set bandit spawn point at: {banditSpawnPoint}");
                     }
@@ -176,28 +223,53 @@ namespace Oxide.Plugins
         #endregion
 
         #region Cooldown Methods
-        private bool IsOnCooldown(ulong userId)
+        private bool IsOnCooldown(ulong userId, string location)
         {
             if (!playerCooldowns.ContainsKey(userId))
                 return false;
 
-            var timeRemaining = GetCooldownTimeRemaining(userId);
+            if (!playerCooldowns[userId].ContainsKey(location))
+                return false;
+
+            var timeRemaining = GetCooldownTimeRemaining(userId, location);
             return timeRemaining > 0;
         }
 
-        private double GetCooldownTimeRemaining(ulong userId)
+        private double GetCooldownTimeRemaining(ulong userId, string location)
         {
-            if (!playerCooldowns.ContainsKey(userId))
+            if (!playerCooldowns.ContainsKey(userId) || !playerCooldowns[userId].ContainsKey(location))
                 return 0;
 
-            var timeSinceLast = DateTime.UtcNow - playerCooldowns[userId];
-            var cooldownSeconds = config.CooldownMinutes * 60;
+            var timeSinceLast = DateTime.UtcNow - playerCooldowns[userId][location];
+            float cooldownSeconds = location == "outpost"
+                ? config.SpawnSettings.OutpostCooldown
+                : config.SpawnSettings.BanditCooldown;
+
             return Math.Max(0, cooldownSeconds - timeSinceLast.TotalSeconds);
         }
 
-        private void StartCooldown(ulong userId)
+        private void StartCooldown(ulong userId, string location)
         {
-            playerCooldowns[userId] = DateTime.UtcNow;
+            if (!playerCooldowns.ContainsKey(userId))
+                playerCooldowns[userId] = new Dictionary<string, DateTime>();
+
+            playerCooldowns[userId][location] = DateTime.UtcNow;
+        }
+        #endregion
+
+        #region Spawn Methods
+        private void SetPlayerSpawnConditions(BasePlayer player)
+        {
+            if (player == null) return;
+
+            player.health = config.SpawnSettings.SpawnHealth;
+
+            var metabolism = player.metabolism;
+            if (metabolism != null)
+            {
+                metabolism.calories.value = config.SpawnSettings.SpawnFood;
+                metabolism.hydration.value = config.SpawnSettings.SpawnWater;
+            }
         }
         #endregion
 
@@ -219,7 +291,7 @@ namespace Oxide.Plugins
 
                 elements.Add(new CuiPanel
                 {
-                    Image = { Color = IsOnCooldown(player.userID) ? config.GuiSettings.DisabledColor : config.GuiSettings.OutpostColor },
+                    Image = { Color = IsOnCooldown(player.userID, "outpost") ? config.GuiSettings.DisabledColor : config.GuiSettings.OutpostColor },
                     RectTransform = { AnchorMin = "0 0", AnchorMax = "1 1" },
                     CursorEnabled = true
                 }, $"{GUI_PANEL_NAME}_overlay", GUI_PANEL_NAME);
@@ -251,7 +323,7 @@ namespace Oxide.Plugins
                     });
                 }
 
-                var timeRemaining = GetCooldownTimeRemaining(player.userID);
+                var timeRemaining = GetCooldownTimeRemaining(player.userID, "outpost");
                 string buttonText = timeRemaining > 0 ? $"OUTPOST ({timeRemaining:F0}s)" : "OUTPOST »";
                 string textColor = timeRemaining > 0 ? config.GuiSettings.CooldownColor : config.GuiSettings.TextColor;
 
@@ -283,7 +355,7 @@ namespace Oxide.Plugins
 
                 elements.Add(new CuiPanel
                 {
-                    Image = { Color = IsOnCooldown(player.userID) ? config.GuiSettings.DisabledColor : config.GuiSettings.BanditColor },
+                    Image = { Color = IsOnCooldown(player.userID, "bandit") ? config.GuiSettings.DisabledColor : config.GuiSettings.BanditColor },
                     RectTransform = { AnchorMin = "0 0", AnchorMax = "1 1" },
                     CursorEnabled = true
                 }, $"{BANDIT_PANEL_NAME}_overlay", BANDIT_PANEL_NAME);
@@ -315,7 +387,7 @@ namespace Oxide.Plugins
                     });
                 }
 
-                var timeRemaining = GetCooldownTimeRemaining(player.userID);
+                var timeRemaining = GetCooldownTimeRemaining(player.userID, "bandit");
                 string buttonText = timeRemaining > 0 ? $"BANDIT ({timeRemaining:F0}s)" : "BANDIT »";
                 string textColor = timeRemaining > 0 ? config.GuiSettings.CooldownColor : config.GuiSettings.TextColor;
 
@@ -339,8 +411,11 @@ namespace Oxide.Plugins
             DestroyGUI(player);
             CuiHelper.AddUi(player, elements);
 
-            var cooldownTime = GetCooldownTimeRemaining(player.userID);
-            if (cooldownTime > 0)
+            var outpostCooldown = GetCooldownTimeRemaining(player.userID, "outpost");
+            var banditCooldown = GetCooldownTimeRemaining(player.userID, "bandit");
+            var maxCooldown = Math.Max(outpostCooldown, banditCooldown);
+
+            if (maxCooldown > 0)
             {
                 if (guiTimers.ContainsKey(player.userID))
                 {
@@ -376,7 +451,7 @@ namespace Oxide.Plugins
 
             initialGUITimer = timer.Once(4.0f, () =>
             {
-                if (!player.IsDead()) return; 
+                if (!player.IsDead()) return;
                 ShowRespawnGUI(player);
 
                 timer.Once(0.5f, () =>
@@ -406,6 +481,12 @@ namespace Oxide.Plugins
 
         void OnPlayerDisconnected(BasePlayer player)
         {
+            if (guiTimers.ContainsKey(player.userID))
+            {
+                guiTimers[player.userID]?.Destroy();
+                guiTimers.Remove(player.userID);
+            }
+
             DestroyGUI(player);
         }
         #endregion
@@ -429,14 +510,14 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if (IsOnCooldown(player.userID))
+            string location = arg.GetString(0, "outpost").ToLower();
+
+            if (IsOnCooldown(player.userID, location))
             {
-                var timeRemaining = GetCooldownTimeRemaining(player.userID);
-                player.ChatMessage($"You must wait {timeRemaining:F0} seconds before using safezone respawn again");
+                var timeRemaining = GetCooldownTimeRemaining(player.userID, location);
+                player.ChatMessage($"You must wait {timeRemaining:F0} seconds before using this spawn point again");
                 return;
             }
-
-            string location = arg.GetString(0, "outpost").ToLower();
 
             try
             {
@@ -444,13 +525,15 @@ namespace Oxide.Plugins
                 {
                     Quaternion spawnRotation = Quaternion.LookRotation((outpostPosition - outpostSpawnPoint).normalized);
                     player.RespawnAt(outpostSpawnPoint, spawnRotation);
-                    StartCooldown(player.userID);
+                    SetPlayerSpawnConditions(player);
+                    StartCooldown(player.userID, "outpost");
                 }
                 else if (location == "bandit" && config.EnableBandit)
                 {
                     Quaternion spawnRotation = Quaternion.LookRotation((banditPosition - banditSpawnPoint).normalized);
                     player.RespawnAt(banditSpawnPoint, spawnRotation);
-                    StartCooldown(player.userID);
+                    SetPlayerSpawnConditions(player);
+                    StartCooldown(player.userID, "bandit");
                 }
                 DestroyGUI(player);
             }
