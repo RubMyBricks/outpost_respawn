@@ -18,7 +18,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Safezone Respawner", "RubMyBricks", "1.3.0")]
+    [Info("Safezone Respawner", "RubMyBricks", "1.3.2")]
     [Description("Allows players to respawn at safezones upon death with cooldown!")]
     public class SafezoneRespawner : RustPlugin
     {
@@ -79,7 +79,7 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Spawn Food (max =300?)")]
             public float SpawnFood { get; set; } = 300f;
 
-            [JsonProperty(PropertyName = "Spawn Water (max =250)]
+            [JsonProperty(PropertyName = "Spawn Water (max =250)")]
             public float SpawnWater { get; set; } = 200f;
 
             [JsonProperty(PropertyName = "Spawn Position Offsets")]
@@ -160,14 +160,45 @@ namespace Oxide.Plugins
             {
                 if (ImageLibrary == null)
                 {
-                    PrintWarning("ImageLibrary is enabled in config but not loaded! Plugin will use default icons.");
+                    PrintWarning("ImageLibrary is not loaded! Plugin will use default icons.");
+                    config.UseImageLibrary = false;
+                    SaveConfig();
                 }
                 else
                 {
-                    ImageLibrary.Call("AddImage", config.Images.OutpostImage, OUTPOST_IMAGE_ID);
-                    ImageLibrary.Call("AddImage", config.Images.BanditImage, BANDIT_IMAGE_ID);
+                    string outpostUrl = EnsureHttps(config.Images.OutpostImage);
+                    string banditUrl = EnsureHttps(config.Images.BanditImage);
+
+                    bool outpostSuccess = ImageLibrary.Call<bool>("AddImage", outpostUrl, OUTPOST_IMAGE_ID);
+                    if (!outpostSuccess)
+                    {
+                        PrintWarning($"Failed to load Outpost image from {outpostUrl}");
+                    }
+
+                    bool banditSuccess = ImageLibrary.Call<bool>("AddImage", banditUrl, BANDIT_IMAGE_ID);
+                    if (!banditSuccess)
+                    {
+                        PrintWarning($"Failed to load Bandit image from {banditUrl}");
+                    }
                 }
             }
+        }
+
+        private string EnsureHttps(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return url;
+
+            if (url.StartsWith("http://i.imgur.com"))
+            {
+                return url.Replace("http://", "https://");
+            }
+            else if (url.Contains("imgur.com") && !url.Contains("i.imgur.com"))
+            {
+                string[] urlParts = url.Split('/');
+                string imgurId = urlParts[urlParts.Length - 1];
+                return $"https://i.imgur.com/{imgurId}.png";
+            }
+            return url;
         }
 
         private void InitializeSpawnPoints()
@@ -296,32 +327,29 @@ namespace Oxide.Plugins
                     CursorEnabled = true
                 }, $"{GUI_PANEL_NAME}_overlay", GUI_PANEL_NAME);
 
-                if (config.UseImageLibrary && ImageLibrary != null)
+                elements.Add(new CuiElement
                 {
-                    elements.Add(new CuiElement
-                    {
-                        Name = $"{GUI_PANEL_NAME}_icon",
-                        Parent = GUI_PANEL_NAME,
-                        Components =
-                        {
-                            new CuiRawImageComponent { Png = (string)ImageLibrary.Call("GetImage", OUTPOST_IMAGE_ID) },
-                            new CuiRectTransformComponent { AnchorMin = "0.02 0.1", AnchorMax = "0.18 0.9" }
-                        }
-                    });
+                    Name = $"{GUI_PANEL_NAME}_icon",
+                    Parent = GUI_PANEL_NAME,
+                    Components =
+            {
+                config.UseImageLibrary && ImageLibrary != null
+                ? new CuiRawImageComponent {
+                    Png = (string)ImageLibrary.Call("GetImage", OUTPOST_IMAGE_ID),
+                    Material = "assets/content/ui/uibackgroundblur-ingame.mat"  
                 }
-                else
-                {
-                    elements.Add(new CuiElement
-                    {
-                        Name = $"{GUI_PANEL_NAME}_icon",
-                        Parent = GUI_PANEL_NAME,
-                        Components =
-                        {
-                            new CuiImageComponent { Sprite = "assets/icons/arrow_right.png", Color = config.GuiSettings.TextColor },
-                            new CuiRectTransformComponent { AnchorMin = "0.02 0.1", AnchorMax = "0.18 0.9" }
-                        }
-                    });
+                : new CuiImageComponent {
+                    Sprite = "assets/icons/arrow_right.png",
+                    Color = config.GuiSettings.TextColor
+                },
+                new CuiRectTransformComponent {
+                    AnchorMin = "0.02 0.15",
+                    AnchorMax = "0.15 0.85",  
+                    OffsetMin = "1 1",
+                    OffsetMax = "-1 -1"
                 }
+            }
+                });
 
                 var timeRemaining = GetCooldownTimeRemaining(player.userID, "outpost");
                 string buttonText = timeRemaining > 0 ? $"OUTPOST ({timeRemaining:F0}s)" : "OUTPOST »";
@@ -360,32 +388,29 @@ namespace Oxide.Plugins
                     CursorEnabled = true
                 }, $"{BANDIT_PANEL_NAME}_overlay", BANDIT_PANEL_NAME);
 
-                if (config.UseImageLibrary && ImageLibrary != null)
+                elements.Add(new CuiElement
                 {
-                    elements.Add(new CuiElement
-                    {
-                        Name = $"{BANDIT_PANEL_NAME}_icon",
-                        Parent = BANDIT_PANEL_NAME,
-                        Components =
-                        {
-                            new CuiRawImageComponent { Png = (string)ImageLibrary.Call("GetImage", BANDIT_IMAGE_ID) },
-                            new CuiRectTransformComponent { AnchorMin = "0.02 0.1", AnchorMax = "0.18 0.9" }
-                        }
-                    });
+                    Name = $"{BANDIT_PANEL_NAME}_icon",
+                    Parent = BANDIT_PANEL_NAME,
+                    Components =
+            {
+                config.UseImageLibrary && ImageLibrary != null
+                ? new CuiRawImageComponent {
+                    Png = (string)ImageLibrary.Call("GetImage", BANDIT_IMAGE_ID),
+                    Material = "assets/content/ui/uibackgroundblur-ingame.mat"  
                 }
-                else
-                {
-                    elements.Add(new CuiElement
-                    {
-                        Name = $"{BANDIT_PANEL_NAME}_icon",
-                        Parent = BANDIT_PANEL_NAME,
-                        Components =
-                        {
-                            new CuiImageComponent { Sprite = "assets/icons/arrow_right.png", Color = config.GuiSettings.TextColor },
-                            new CuiRectTransformComponent { AnchorMin = "0.02 0.1", AnchorMax = "0.18 0.9" }
-                        }
-                    });
+                : new CuiImageComponent {
+                    Sprite = "assets/icons/arrow_right.png",
+                    Color = config.GuiSettings.TextColor
+                },
+                new CuiRectTransformComponent {
+                    AnchorMin = "0.02 0.15",
+                    AnchorMax = "0.15 0.85",
+                    OffsetMin = "1 1",
+                    OffsetMax = "-1 -1"
                 }
+            }
+                });
 
                 var timeRemaining = GetCooldownTimeRemaining(player.userID, "bandit");
                 string buttonText = timeRemaining > 0 ? $"BANDIT ({timeRemaining:F0}s)" : "BANDIT »";
