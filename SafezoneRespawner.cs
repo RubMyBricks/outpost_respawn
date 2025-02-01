@@ -15,11 +15,12 @@ using UnityEngine;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using System;
+using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Safezone Respawner", "RubMyBricks", "1.3.2")]
-    [Description("Allows players to respawn at safezones upon death with cooldown!")]
+    [Info("Safezone Respawner", "RubMyBricks", "1.4.0")]
+    [Description("Allows players to respawn at safezones upon death!")]
     public class SafezoneRespawner : RustPlugin
     {
         [PluginReference] private Plugin ImageLibrary;
@@ -39,8 +40,14 @@ namespace Oxide.Plugins
         private Vector3 banditSpawnPoint;
         private Dictionary<ulong, Timer> guiTimers = new Dictionary<ulong, Timer>();
         private Dictionary<ulong, Dictionary<string, DateTime>> playerCooldowns = new Dictionary<ulong, Dictionary<string, DateTime>>();
+        private HashSet<ulong> recentlyRespawned = new HashSet<ulong>();
         private bool isInitialized = false;
         private ConfigData config;
+        //cache
+        private HashSet<ulong> permissionCache = new HashSet<ulong>();
+        private readonly Dictionary<ulong, BasePlayer> playerCache = new Dictionary<ulong, BasePlayer>();
+        private Timer cacheCleanupTimer;
+        private const int CACHE_CLEANUP_INTERVAL = 300; 
         #endregion
 
         #region Configuration
@@ -51,6 +58,9 @@ namespace Oxide.Plugins
 
             [JsonProperty(PropertyName = "Enable Bandit Camp Respawn")]
             public bool EnableBandit { get; set; } = false;
+
+            [JsonProperty(PropertyName = "Remove Hostility On Respawn")]
+            public bool RemoveHostilityOnRespawn { get; set; } = false;
 
             [JsonProperty(PropertyName = "Use ImageLibrary for Icons")]
             public bool UseImageLibrary { get; set; } = false;
@@ -72,6 +82,15 @@ namespace Oxide.Plugins
 
             [JsonProperty(PropertyName = "Bandit Camp Cooldown (seconds)")]
             public float BanditCooldown { get; set; } = 120f;
+
+            [JsonProperty(PropertyName = "Enable Health Setting")]
+            public bool EnableHealth { get; set; } = false;
+
+            [JsonProperty(PropertyName = "Enable Food Setting")]
+            public bool EnableFood { get; set; } = false;
+
+            [JsonProperty(PropertyName = "Enable Water Setting")]
+            public bool EnableWater { get; set; } = false;
 
             [JsonProperty(PropertyName = "Spawn Health (max =100")]
             public float SpawnHealth { get; set; } = 100f;
@@ -155,6 +174,7 @@ namespace Oxide.Plugins
         {
             permission.RegisterPermission(PermissionUse, this);
             InitializeSpawnPoints();
+            InitializeCaching();
 
             if (config.UseImageLibrary)
             {
@@ -172,13 +192,13 @@ namespace Oxide.Plugins
                     bool outpostSuccess = ImageLibrary.Call<bool>("AddImage", outpostUrl, OUTPOST_IMAGE_ID);
                     if (!outpostSuccess)
                     {
-                        PrintWarning($"Failed to load Outpost image from {outpostUrl}");
+                        PrintWarning($"Failed to load outpost image from {outpostUrl}");
                     }
 
                     bool banditSuccess = ImageLibrary.Call<bool>("AddImage", banditUrl, BANDIT_IMAGE_ID);
                     if (!banditSuccess)
                     {
-                        PrintWarning($"Failed to load Bandit image from {banditUrl}");
+                        PrintWarning($"Failed to load bandit camp image from {banditUrl}");
                     }
                 }
             }
@@ -251,6 +271,36 @@ namespace Oxide.Plugins
                 PrintError($"Error initializing spawn points: {ex}");
             }
         }
+
+        private void InitializeCaching()
+        {
+            cacheCleanupTimer?.Destroy();
+            cacheCleanupTimer = timer.Every(CACHE_CLEANUP_INTERVAL, CleanupCaches);
+        }
+
+        private void CleanupCaches()
+        {
+            var offlinePermPlayers = permissionCache.ToList();
+            foreach (var userId in offlinePermPlayers)
+            {
+                var player = BasePlayer.FindByID(userId);
+                if (player == null || !player.IsConnected)
+                {
+                    permissionCache.Remove(userId);
+                }
+            }
+
+            var offlinePlayers = playerCache.Keys.ToList();
+            foreach (var userId in offlinePlayers)
+            {
+                var player = BasePlayer.FindByID(userId);
+                if (player == null || !player.IsConnected)
+                {
+                    playerCache.Remove(userId);
+                }
+            }
+        }
+
         #endregion
 
         #region Cooldown Methods
@@ -293,13 +343,23 @@ namespace Oxide.Plugins
         {
             if (player == null) return;
 
-            player.health = config.SpawnSettings.SpawnHealth;
+            if (config.SpawnSettings.EnableHealth)
+            {
+                player.health = config.SpawnSettings.SpawnHealth;
+            }
 
             var metabolism = player.metabolism;
             if (metabolism != null)
             {
-                metabolism.calories.value = config.SpawnSettings.SpawnFood;
-                metabolism.hydration.value = config.SpawnSettings.SpawnWater;
+                if (config.SpawnSettings.EnableFood)
+                {
+                    metabolism.calories.value = config.SpawnSettings.SpawnFood;
+                }
+
+                if (config.SpawnSettings.EnableWater)
+                {
+                    metabolism.hydration.value = config.SpawnSettings.SpawnWater;
+                }
             }
         }
         #endregion
@@ -317,7 +377,7 @@ namespace Oxide.Plugins
                 {
                     Image = { Color = "0 0 0 0" },
                     RectTransform = { AnchorMin = "0.45 0.15", AnchorMax = "0.55 0.22" },
-                    CursorEnabled = false
+                    CursorEnabled = true
                 }, "Overlay", $"{GUI_PANEL_NAME}_overlay");
 
                 elements.Add(new CuiPanel
@@ -335,8 +395,7 @@ namespace Oxide.Plugins
             {
                 config.UseImageLibrary && ImageLibrary != null
                 ? new CuiRawImageComponent {
-                    Png = (string)ImageLibrary.Call("GetImage", OUTPOST_IMAGE_ID),
-                    Material = "assets/content/ui/uibackgroundblur-ingame.mat"  
+                    Png = (string)ImageLibrary.Call("GetImage", OUTPOST_IMAGE_ID)
                 }
                 : new CuiImageComponent {
                     Sprite = "assets/icons/arrow_right.png",
@@ -344,7 +403,7 @@ namespace Oxide.Plugins
                 },
                 new CuiRectTransformComponent {
                     AnchorMin = "0.02 0.15",
-                    AnchorMax = "0.15 0.85",  
+                    AnchorMax = "0.15 0.85",
                     OffsetMin = "1 1",
                     OffsetMax = "-1 -1"
                 }
@@ -396,8 +455,7 @@ namespace Oxide.Plugins
             {
                 config.UseImageLibrary && ImageLibrary != null
                 ? new CuiRawImageComponent {
-                    Png = (string)ImageLibrary.Call("GetImage", BANDIT_IMAGE_ID),
-                    Material = "assets/content/ui/uibackgroundblur-ingame.mat"  
+                    Png = (string)ImageLibrary.Call("GetImage", BANDIT_IMAGE_ID)
                 }
                 : new CuiImageComponent {
                     Sprite = "assets/icons/arrow_right.png",
@@ -502,6 +560,68 @@ namespace Oxide.Plugins
             }
 
             DestroyGUI(player);
+
+            if (config.RemoveHostilityOnRespawn)
+            {
+                recentlyRespawned.Add(player.userID);
+                player.State.unHostileTimestamp = CurrentTime() + 300;  
+                timer.Once(5f, () => {
+                    if (recentlyRespawned.Contains(player.userID))
+                    {
+                        recentlyRespawned.Remove(player.userID);
+                    }
+                });
+            }
+        }
+
+        object OnPlayerAssist(BasePlayer player, BasePlayer target)
+        {
+            if (config.RemoveHostilityOnRespawn && recentlyRespawned.Contains(player.userID))
+                return true;
+            return null;
+        }
+
+        object OnTimeSincePvP(BasePlayer player, float oldTimer)
+        {
+            if (config.RemoveHostilityOnRespawn && recentlyRespawned.Contains(player.userID))
+                return 0f;
+            return null;
+        }
+
+        object OnPlayerEnterAggressiveTrigger(BasePlayer player, TriggerBase trigger)
+        {
+            if (config.RemoveHostilityOnRespawn && recentlyRespawned.Contains(player.userID))
+                return true;
+            return null;
+        }
+
+        object OnPlayerExitAggressiveTrigger(BasePlayer player, TriggerBase trigger)
+        {
+            if (config.RemoveHostilityOnRespawn && recentlyRespawned.Contains(player.userID))
+                return true;
+            return null;
+        }
+
+        object OnPlayerMarkHostile(BasePlayer player, float duration)
+        {
+            if (player == null) return null;
+
+            if (config.RemoveHostilityOnRespawn && recentlyRespawned.Contains(player.userID))
+            {
+                return true;
+            }
+            return null;
+        }
+
+        object CanBeHostile(BasePlayer player)
+        {
+            if (player == null) return null;
+
+            if (config.RemoveHostilityOnRespawn && recentlyRespawned.Contains(player.userID))
+            {
+                return false;
+            }
+            return null;
         }
 
         void OnPlayerDisconnected(BasePlayer player)
@@ -512,8 +632,27 @@ namespace Oxide.Plugins
                 guiTimers.Remove(player.userID);
             }
 
+            if (recentlyRespawned.Contains(player.userID))
+                recentlyRespawned.Remove(player.userID);
+
             DestroyGUI(player);
         }
+
+        private bool HasPermission(BasePlayer player)
+        {
+            if (permissionCache.Contains(player.userID))
+                return true;
+
+            if (permission.UserHasPermission(player.UserIDString, PermissionUse))
+            {
+                permissionCache.Add(player.userID);
+                return true;
+            }
+
+            return false;
+        }
+
+        private float CurrentTime() => Time.realtimeSinceStartup;
         #endregion
 
         #region Commands
@@ -572,13 +711,15 @@ namespace Oxide.Plugins
 
         void Unload()
         {
-            initialGUITimer?.Destroy();
-
             foreach (var timer in guiTimers.Values)
             {
                 timer?.Destroy();
             }
             guiTimers.Clear();
+            recentlyRespawned.Clear();
+            cacheCleanupTimer?.Destroy();
+            permissionCache.Clear();
+            playerCache.Clear();
 
             foreach (var player in BasePlayer.activePlayerList)
             {
