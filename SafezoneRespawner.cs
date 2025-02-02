@@ -19,7 +19,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Safezone Respawner", "RubMyBricks", "1.4.0")]
+    [Info("Safezone Respawner", "RubMyBricks", "1.4.1")]
     [Description("Allows players to respawn at safezones upon death!")]
     public class SafezoneRespawner : RustPlugin
     {
@@ -371,12 +371,22 @@ namespace Oxide.Plugins
 
             var elements = new CuiElementContainer();
 
+            const string BUTTON_HEIGHT_MIN = "0.15";
+            const string BUTTON_HEIGHT_MAX = "0.22";
+            const float OUTPOST_MIN_X = 0.45f;
+            const float OUTPOST_MAX_X = 0.55f;
+            const float BANDIT_MIN_X = 0.56f;
+            const float BANDIT_MAX_X = 0.66f;
+
             if (config.EnableOutpost)
             {
                 elements.Add(new CuiPanel
                 {
                     Image = { Color = "0 0 0 0" },
-                    RectTransform = { AnchorMin = "0.45 0.15", AnchorMax = "0.55 0.22" },
+                    RectTransform = { 
+                        AnchorMin = $"{OUTPOST_MIN_X} {BUTTON_HEIGHT_MIN}", 
+                        AnchorMax = $"{OUTPOST_MAX_X} {BUTTON_HEIGHT_MAX}" 
+                    },
                     CursorEnabled = true
                 }, "Overlay", $"{GUI_PANEL_NAME}_overlay");
 
@@ -392,35 +402,43 @@ namespace Oxide.Plugins
                     Name = $"{GUI_PANEL_NAME}_icon",
                     Parent = GUI_PANEL_NAME,
                     Components =
-            {
-                config.UseImageLibrary && ImageLibrary != null
-                ? new CuiRawImageComponent {
-                    Png = (string)ImageLibrary.Call("GetImage", OUTPOST_IMAGE_ID)
-                }
-                : new CuiImageComponent {
-                    Sprite = "assets/icons/arrow_right.png",
-                    Color = config.GuiSettings.TextColor
-                },
-                new CuiRectTransformComponent {
-                    AnchorMin = "0.02 0.15",
-                    AnchorMax = "0.15 0.85",
-                    OffsetMin = "1 1",
-                    OffsetMax = "-1 -1"
-                }
-            }
+                    {
+                        config.UseImageLibrary && ImageLibrary != null
+                        ? new CuiRawImageComponent {
+                            Png = (string)ImageLibrary.Call("GetImage", OUTPOST_IMAGE_ID)
+                        }
+                        : new CuiImageComponent {
+                            Sprite = "assets/icons/arrow_right.png",
+                            Color = config.GuiSettings.TextColor
+                        },
+                        new CuiRectTransformComponent {
+                            AnchorMin = "0.02 0.1",
+                            AnchorMax = "0.25 0.9",
+                            OffsetMin = "1 1",
+                            OffsetMax = "-1 -1"
+                        }
+                    }
                 });
 
-                var timeRemaining = GetCooldownTimeRemaining(player.userID, "outpost");
-                string buttonText = timeRemaining > 0 ? $"OUTPOST ({timeRemaining:F0}s)" : "OUTPOST »";
-                string textColor = timeRemaining > 0 ? config.GuiSettings.CooldownColor : config.GuiSettings.TextColor;
+                var outpostTimeRemaining = GetCooldownTimeRemaining(player.userID, "outpost");
+                string outpostButtonText = outpostTimeRemaining > 0 ? $"OUTPOST ({outpostTimeRemaining:F0}s)" : "OUTPOST »";
+                string outpostTextColor = outpostTimeRemaining > 0 ? config.GuiSettings.CooldownColor : config.GuiSettings.TextColor;
 
                 elements.Add(new CuiLabel
                 {
-                    Text = { Text = buttonText, FontSize = 18, Align = TextAnchor.MiddleCenter, Color = textColor },
-                    RectTransform = { AnchorMin = "0.2 0", AnchorMax = "1 1" }
+                    Text = { 
+                        Text = outpostButtonText, 
+                        FontSize = 18, 
+                        Align = TextAnchor.MiddleLeft, 
+                        Color = outpostTextColor 
+                    },
+                    RectTransform = { 
+                        AnchorMin = "0.26 0",  
+                        AnchorMax = "0.95 1" 
+                    }
                 }, GUI_PANEL_NAME);
 
-                if (timeRemaining <= 0)
+                if (outpostTimeRemaining <= 0)
                 {
                     elements.Add(new CuiButton
                     {
@@ -436,8 +454,11 @@ namespace Oxide.Plugins
                 elements.Add(new CuiPanel
                 {
                     Image = { Color = "0 0 0 0" },
-                    RectTransform = { AnchorMin = "0.56 0.15", AnchorMax = "0.66 0.22" },
-                    CursorEnabled = false
+                    RectTransform = { 
+                        AnchorMin = $"{BANDIT_MIN_X} {BUTTON_HEIGHT_MIN}", 
+                        AnchorMax = $"{BANDIT_MAX_X} {BUTTON_HEIGHT_MAX}" 
+                    },
+                    CursorEnabled = true
                 }, "Overlay", $"{BANDIT_PANEL_NAME}_overlay");
 
                 elements.Add(new CuiPanel
@@ -452,35 +473,43 @@ namespace Oxide.Plugins
                     Name = $"{BANDIT_PANEL_NAME}_icon",
                     Parent = BANDIT_PANEL_NAME,
                     Components =
-            {
-                config.UseImageLibrary && ImageLibrary != null
-                ? new CuiRawImageComponent {
-                    Png = (string)ImageLibrary.Call("GetImage", BANDIT_IMAGE_ID)
-                }
-                : new CuiImageComponent {
-                    Sprite = "assets/icons/arrow_right.png",
-                    Color = config.GuiSettings.TextColor
-                },
-                new CuiRectTransformComponent {
-                    AnchorMin = "0.02 0.15",
-                    AnchorMax = "0.15 0.85",
-                    OffsetMin = "1 1",
-                    OffsetMax = "-1 -1"
-                }
-            }
+                    {
+                        config.UseImageLibrary && ImageLibrary != null
+                        ? new CuiRawImageComponent {
+                            Png = (string)ImageLibrary.Call("GetImage", BANDIT_IMAGE_ID)
+                        }
+                        : new CuiImageComponent {
+                            Sprite = "assets/icons/arrow_right.png",
+                            Color = config.GuiSettings.TextColor
+                        },
+                        new CuiRectTransformComponent {
+                            AnchorMin = "0.02 0.1",
+                            AnchorMax = "0.25 0.9",
+                            OffsetMin = "1 1",
+                            OffsetMax = "-1 -1"
+                        }
+                    }
                 });
 
-                var timeRemaining = GetCooldownTimeRemaining(player.userID, "bandit");
-                string buttonText = timeRemaining > 0 ? $"BANDIT ({timeRemaining:F0}s)" : "BANDIT »";
-                string textColor = timeRemaining > 0 ? config.GuiSettings.CooldownColor : config.GuiSettings.TextColor;
+                var banditTimeRemaining = GetCooldownTimeRemaining(player.userID, "bandit");
+                string banditButtonText = banditTimeRemaining > 0 ? $"BANDIT ({banditTimeRemaining:F0}s)" : "BANDIT »";
+                string banditTextColor = banditTimeRemaining > 0 ? config.GuiSettings.CooldownColor : config.GuiSettings.TextColor;
 
                 elements.Add(new CuiLabel
                 {
-                    Text = { Text = buttonText, FontSize = 18, Align = TextAnchor.MiddleCenter, Color = textColor },
-                    RectTransform = { AnchorMin = "0.2 0", AnchorMax = "1 1" }
+                    Text = { 
+                        Text = banditButtonText, 
+                        FontSize = 18, 
+                        Align = TextAnchor.MiddleCenter, 
+                        Color = banditTextColor 
+                    },
+                    RectTransform = { 
+                        AnchorMin = "0.26 0",  
+                        AnchorMax = "0.95 1" 
+                    }
                 }, BANDIT_PANEL_NAME);
 
-                if (timeRemaining <= 0)
+                if (banditTimeRemaining <= 0)
                 {
                     elements.Add(new CuiButton
                     {
