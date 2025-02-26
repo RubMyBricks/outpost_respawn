@@ -19,7 +19,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Safezone Respawner", "RubMyBricks", "1.4.1")]
+    [Info("Safezone Respawner", "RubMyBricks", "1.4.2")]
     [Description("Allows players to respawn at safezones upon death!")]
     public class SafezoneRespawner : RustPlugin
     {
@@ -679,6 +679,28 @@ namespace Oxide.Plugins
             }
 
             return false;
+        }
+
+        void OnPlayerConnected(BasePlayer player)
+        {
+            if (player.IsDead() && permission.UserHasPermission(player.UserIDString, PermissionUse))
+            {
+                timer.Once(1.0f, () =>
+                {
+                    if (player == null || !player.IsConnected) return;
+
+                    if (player.IsDead())
+                    {
+                        ShowRespawnGUI(player);
+
+                        timer.Once(0.5f, () =>
+                        {
+                            if (player == null || !player.IsConnected || !player.IsDead()) return;
+                            ShowRespawnGUI(player);
+                        });
+                    }
+                });
+            }
         }
 
         private float CurrentTime() => Time.realtimeSinceStartup;
